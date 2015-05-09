@@ -1,0 +1,26 @@
+{
+	"host": "127.0.0.1",
+	"port": 2883,
+	"appName": "virtsensor",
+	"datapoints": [{
+		"props": {
+			"name": "temperature",
+			"dataType": "numeric",
+			"dataUnit": "摄氏度",
+			"dataRangeMin": "-50",
+			"dataRangeMax": "100",
+			"sampleRate": "10",
+			"appName": "virtsensor"
+		}
+	},{
+		"props": {
+			"name": "humidity",
+			"dataType": "numeric",
+			"dataUnit": "%",
+			"dataRangeMin": "0",
+			"dataRangeMax": "100",
+			"sampleRate": "10",
+			"appName": "virtsensor"
+		}
+	}]
+}

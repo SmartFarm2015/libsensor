@@ -1,0 +1,7 @@
+*~
+*.swp
+.libs/
+*.lo
+*.o
+/libjson-c.la
+/libjson.la
