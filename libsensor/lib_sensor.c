@@ -22,6 +22,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <pthread.h>
 #endif
 #include <string.h>
 #include <errno.h>
@@ -33,6 +34,8 @@
 
 #define __stringify_1(x)    #x
 #define __stringify(x)      __stringify_1(x)
+
+#define MAXLINE 4096
 
 #ifdef _MSC_VER
 #define insane_free(ptr) { free(ptr); ptr = 0; }
@@ -52,8 +55,7 @@ int vasprintf(char **strp, const char *fmt, va_list ap)
 				r = -1;
 			}
 		}
-	}
-	else { *strp = 0; }
+	} else { *strp = 0; }
 
 	return(r);
 }
@@ -71,7 +73,7 @@ int asprintf(char **strp, const char *fmt, ...)
 static int s_running = 1;
 
 json_object *datapoints, *config;
-char *config_file;
+const char *config_file;
 int fd;
 
 /* The list of intervals to collect data for each datapoint */
@@ -80,6 +82,14 @@ LIST_HEAD(intervals);
 struct interval {
 	struct list_head list;
 	long long t;
+};
+
+struct upload_info {
+	char *host;
+	char *file;
+	char *url;
+	int port;
+	int retry;
 };
 
 long long get_system_time() {
@@ -94,15 +104,81 @@ void sig_handler(int signo)
 	s_running = 0;
 }
 
+static void *http_putfile(void *thread_param);
+
+/*
+ * Schedule file transfer into a thread
+ */
+static void scheduleFileTransfer(int id, char *file)
+{
+	struct upload_info *upinfo = malloc(sizeof(struct upload_info));
+	upinfo->file = strdup(file);
+
+	/* cloud server address */
+	json_object *jo = json_object_object_get(config, "cloudserveraddr");
+	if (jo == NULL)
+		upinfo->host = strdup("cloud.easyiot.com.cn");
+	else
+		upinfo->host = strdup(json_object_get_string(jo));
+
+	/* cloud server port */
+	jo = json_object_object_get(config, "cloudserverport");
+	if (jo == NULL)
+		upinfo->port = 80;
+	else
+		upinfo->port = json_object_get_int(jo);
+#ifdef _MSC_VER
+	char * filename = strchr(file, '\\');
+#else
+	char * filename = strchr(file, '/');
+#endif
+	filename = filename ? filename + 1 : file;
+	jo = json_object_object_get(config, "api");
+	if (jo == NULL)
+		asprintf(&upinfo->url, "/api/file/personal/%s_%d/%s?apiKey=%s",
+		json_object_get_string(json_object_object_get(config, "devid")),
+		id,
+		filename,
+		json_object_get_string(json_object_object_get(config, "apikey"))
+		);
+	else
+		asprintf(&upinfo->url, "%s/%s_%d/%s?apiKey=%s",
+		json_object_get_string(jo),
+		json_object_get_string(json_object_object_get(config, "devid")),
+		id,
+		filename,
+		json_object_get_string(json_object_object_get(config, "apikey"))
+		);
+
+	jo = json_object_object_get(config, "retry");
+	if (jo == NULL)
+		upinfo->retry = 5;
+	else
+		upinfo->retry = json_object_get_int(jo);
+
+	if (upinfo->file == NULL || upinfo->host == NULL || upinfo->url == NULL) {
+		printf("Out of memory!");
+		return;
+	}
+#ifdef _MSC_VER
+	HANDLE thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)http_putfile, (void *)upinfo, 0, NULL);
+#else
+	pthread_t thr;
+	if (pthread_create(&thr, NULL, http_putfile, (void*)upinfo) != 0) {
+		printf("create upload thread failed");
+	}
+#endif
+}
+
 /*
  * Get datapoint data according to datapoint index
  */
-static double get_datapoint_data_dummy(json_object *props)
+static void * get_datapoint_data_dummy(void *props)
 {
-	return 0;
+	return NULL;
 }
 
-double (*__get_datapoint_data)(json_object *) = get_datapoint_data_dummy;
+void * (*__get_datapoint_data)(void *) = get_datapoint_data_dummy;
 
 static void add_interval() {
 	/* add data collect time stamp for new datapoint */
@@ -129,7 +205,7 @@ void handle_message(json_object *req, json_object *res)
 	json_object *params = json_object_object_get(req, "params");
 	json_object *idx, *jo, *val;
 	int i, n, dpid;
-	char *msg;
+	const char *msg;
 
 	if (method == NULL || params == NULL) {
 		/* Message format error */
@@ -153,16 +229,15 @@ void handle_message(json_object *req, json_object *res)
 		 * }
 		 */
 		int found = 0;
-		char *node;
 		/* which datapoint to operate by id */
 		dpid = json_object_get_int(json_object_object_get(params, "id"));
 		n = json_object_array_length(datapoints);
-		for (i=0; i<n; i++) {
+		for (i = 0; i < n; i++) {
 			idx = json_object_array_get_idx(datapoints, i);
 			if (atoi(json_object_get_string(json_object_object_get(idx, "id"))) == dpid)
 				break;
 		}
-		if (i<n) {
+		if (i < n) {
 			/* found datapoint id, try to find node */
 			msg = json_object_get_string(json_object_object_get(params, "node"));
 			jo = json_object_object_get(idx, "props");
@@ -207,16 +282,28 @@ void handle_message(json_object *req, json_object *res)
 
 		// Try to find id from local managed tree
 		n = json_object_array_length(datapoints);
-		for (i=0; i<n; i++) {
+		for (i = 0; i < n; i++) {
 			idx = json_object_array_get_idx(datapoints, i);
 			if (atoi(json_object_get_string(json_object_object_get(idx, "id"))) == dpid) break;
 		}
 
 		// See if found
-		if (i<n) {
+		if (i < n) {
+			json_object *data_obj = NULL;
 			json_object *result_obj = json_object_new_object();
 			json_object_object_add(result_obj, "date", json_object_new_int64(get_system_time()));
-			json_object_object_add(result_obj, "data", json_object_new_double(__get_datapoint_data(json_object_object_get(idx, "props"))));
+			const char *datatype = json_object_get_string(json_object_object_get(idx, "dataType"));
+			void *data = __get_datapoint_data(json_object_object_get(idx, "props"));
+			if (data != NULL) {
+				if (strcmp(datatype, "numeric") == 0) {
+					data_obj = json_object_new_double(*(double*)data);
+				} else if (strcmp(datatype, "file") == 0) {
+					data_obj = json_object_new_string((const char*)data);
+					scheduleFileTransfer(dpid, (char*)data);
+				}
+				free(data);
+			}
+			json_object_object_add(result_obj, "data", data_obj);
 			json_object_object_add(res, "result", result_obj);
 		} else {
 			json_object_object_add(res, "result", json_object_new_boolean(FALSE));
@@ -247,7 +334,7 @@ void handle_message(json_object *req, json_object *res)
 			add_interval();
 			json_object *newdp = json_object_new_object();
 			json_object_object_add(newdp, "id", json_object_new_string((char*)dp_entry->k));
-			json_object_object_add(newdp, "props", json_object_get(dp_entry->v));
+			json_object_object_add(newdp, "props", json_object_get((struct json_object *)dp_entry->v));
 			json_object_array_add(datapoints, json_object_get(newdp));
 		}
 		json_object_to_file_ext(config_file, config, JSON_C_TO_STRING_PRETTY);
@@ -274,10 +361,10 @@ void handle_message(json_object *req, json_object *res)
 		n = json_object_array_length(datapoints);
 		json_object *new_dps = json_object_new_array();
 		int found = -1;
-		for (i=0; i<n; i++) {
+		for (i = 0; i < n; i++) {
 			idx = json_object_array_get_idx(datapoints, i);
 			if (atoi(json_object_get_string(json_object_object_get(idx, "id"))) == dpid)
-				found=i;
+				found = i;
 			else
 				json_object_array_add(new_dps, json_object_get(idx));
 		}
@@ -354,7 +441,7 @@ void registerdatapoints(int msgid) {
 	json_object_object_add(reg_msg, "params", val);
 	const char *msg = json_object_get_string(reg_msg);
 	if ((bytes = send(fd, msg, strlen(msg), 0)) < 0) {
-		printf("write socket error:%s\n",strerror(errno));
+		printf("write socket error:%s\n", strerror(errno));
 		close(fd);
 		exit(-1);
 	}
@@ -362,10 +449,10 @@ void registerdatapoints(int msgid) {
 }
 
 int lib_sensor_start(const char *cfg_file,
-                     double (*get_datapoint_data_func)(void *),
-                     void   (*set_datapoint_func)(void *, void *),
-                     void   *data
-)
+	void *(*get_datapoint_data_func)(void *),
+	void(*set_datapoint_func)(void *, void *),
+	void *data
+	)
 {
 	int ret;
 	printf("lib_sensor-%s is initializing ...\n", __stringify(VERSION));
@@ -422,7 +509,7 @@ int lib_sensor_start(const char *cfg_file,
 	sock.sin_family = PF_INET;
 	sock.sin_port = htons(port);
 	sock.sin_addr.s_addr = inet_addr(host);
-	fd = socket(AF_INET,SOCK_STREAM,0);
+	fd = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (fd < 0) {
 		printf("socket() failed error: %d\n", errno);
@@ -437,8 +524,8 @@ int lib_sensor_start(const char *cfg_file,
 		printf("Can't register signal handler.");
 	}
 
-	while((ret = connect(fd, (struct sockaddr*)&sock, sizeof(struct sockaddr_in))) == -1) {
-		if (EINPROGRESS!=errno) {
+	while ((ret = connect(fd, (struct sockaddr*)&sock, sizeof(struct sockaddr_in))) == -1) {
+		if (EINPROGRESS != errno) {
 			printf("Can not connect to dmagent: %s\n", strerror(errno));
 			return -1;
 		}
@@ -462,11 +549,11 @@ int lib_sensor_start(const char *cfg_file,
 	json_object *idx, *jo, *val, *res;
 
 	while (s_running) {
-		struct timeval timeout = {0, 10000};
+		struct timeval timeout = { 0, 10000 };
 		FD_ZERO(&fdset);
 		FD_SET(fd, &fdset);
 		ret = select(fd + 1, &fdset, NULL, NULL, &timeout);
-		if(ret == -1) {
+		if (ret == -1) {
 			printf("Server-select() error!\n");
 			return -1;
 		} else if (ret == 0) {
@@ -477,7 +564,7 @@ int lib_sensor_start(const char *cfg_file,
 			t = get_system_time();
 			for (i = 0; i < n; i++) {
 				idx = json_object_array_get_idx(datapoints, i);
-				opt = atoi(json_object_get_string(json_object_object_get(json_object_object_get(idx, "props"),"sampleRate")));
+				opt = atoi(json_object_get_string(json_object_object_get(json_object_object_get(idx, "props"), "sampleRate")));
 				inter = list_entry(next, struct interval, list);
 				/* check if it is time to collect datapoint data */
 				if (t - inter->t > opt * 1000) {
@@ -499,8 +586,21 @@ int lib_sensor_start(const char *cfg_file,
 					 * }
 					 * Here we just use strings instead of json_object to send out the message.
 					 */
-					asprintf(&msg, "{\"method\": \"data\", \"params\":{\"%s\": {\"date\":%lld, \"data\":\"%lf\"}}, \"id\":%lld}",
-							json_object_get_string(json_object_object_get(idx, "id")), t, __get_datapoint_data(json_object_object_get(idx, "props")), t);
+					json_object *props = json_object_object_get(idx, "props");
+					const char *datatype = json_object_get_string(json_object_object_get(props, "dataType"));
+					void *data = __get_datapoint_data(props);
+					const char *id = json_object_get_string(json_object_object_get(idx, "id"));
+					if (data != NULL) {
+						if (strcmp(datatype, "numeric") == 0) {
+							asprintf(&msg, "{\"method\": \"data\", \"params\":{\"%s\": {\"date\":%lld, \"data\":\"%lf\"}}, \"id\":%lld}",
+								id, t, *(double*)data, t);
+						} else if (strcmp(datatype, "file") == 0) {
+							asprintf(&msg, "{\"method\": \"data\", \"params\":{\"%s\": {\"date\":%lld, \"data\":\"%s\"}}, \"id\":%lld}",
+								id, t, (char*)data, t);
+							scheduleFileTransfer(atoi(id), (char*)data);
+						}
+						free(data);
+					}
 					if (msg) {
 						printf("sending server data msg: %s\n", msg);
 						if ((bytes = send(fd, msg, strlen(msg), 0)) < 0) {
@@ -552,12 +652,12 @@ int lib_sensor_start(const char *cfg_file,
 				if (val != NULL) {
 					/* Response */
 					if (msgid == json_object_get_int(json_object_object_get(jo, "id"))) {
-						/* reg success 
+						/* reg success
 						 * If the result is an array of ids, update local config file.
 						 */
 						if (json_object_get_type(val) == json_type_array) {
 							n = json_object_array_length(val);
-							for (i=0; i<n; i++) {
+							for (i = 0; i < n; i++) {
 								idx = json_object_array_get_idx(val, i);
 								json_object_object_add(json_object_array_get_idx(datapoints, i), "id", json_object_get(idx));
 							}
@@ -571,8 +671,8 @@ int lib_sensor_start(const char *cfg_file,
 					handle_message(jo, res);
 
 					/* Send request processed result back */
-					msg = json_object_get_string(res);
-					if ((bytes = send(fd, msg, strlen(msg), 0)) < 0) {
+					const char *sendbuf = json_object_get_string(res);
+					if ((bytes = send(fd, sendbuf, strlen(sendbuf), 0)) < 0) {
 						perror("write socket error!");
 						close(fd);
 						s_running = 0;
@@ -619,7 +719,7 @@ double get_double_by_name(void *node, const char *name)
 	return json_object_get_double(js_node);
 }
 
-char *get_string_by_name(void *node, const char *name)
+const char *get_string_by_name(void *node, const char *name)
 {
 	json_object *js_node = NULL;
 
@@ -636,3 +736,79 @@ const char *string_from_config_by_name(const char *name)
 {
 	return json_object_get_string(json_object_object_get(config, name));
 }
+
+static void *http_putfile(void *thread_param)
+{
+	if (thread_param == NULL) return NULL;
+#ifndef _MSC_VER
+	pthread_detach(pthread_self());
+#endif
+	FILE *fp;
+	struct hostent *hptr;
+	struct sockaddr_in servaddr;
+	struct upload_info *upinfo = (struct upload_info *)thread_param;
+	char buf[256];
+	int i, sockfd, size;
+	int n;
+	char *sendline = NULL, recvline[MAXLINE + 1];
+	fp = fopen(upinfo->file, "r");
+	if (fp == NULL) {
+		printf("Fail to read file: %s\n", upinfo->file);
+		goto cleanup;
+	}
+	fseek(fp, 0L, SEEK_END);
+	size = ftell(fp);
+
+	if ((hptr = gethostbyname(upinfo->host)) == NULL) {
+		printf("gethostbyname error for host: %s\n", upinfo->host);
+		goto cleanup;
+	}
+
+	for (i = 0; i < upinfo->retry; i++) {
+		sockfd = socket(AF_INET, SOCK_STREAM, 0);
+		memset(&servaddr, 0, sizeof(servaddr));
+		servaddr.sin_family = AF_INET;
+		servaddr.sin_port = htons(upinfo->port);
+		memcpy(&(servaddr.sin_addr.s_addr), hptr->h_addr, hptr->h_length);
+		while (connect(sockfd, (struct sockaddr *) & servaddr, sizeof(servaddr)) == -1) {
+			if (EINPROGRESS != errno) {
+				printf("Connect to server failed.");
+				continue;
+			}
+		}
+
+		fseek(fp, 0L, SEEK_SET);
+		if (sendline != NULL) {
+			free(sendline);
+			sendline = NULL;
+		}
+		asprintf(&sendline,
+			"PUT %s HTTP/1.1\r\n"
+			"HOST: %s\r\n"
+			"Content-type: application/octet-stream\r\n"
+			"Content-length: %d\r\n\r\n"
+			, upinfo->url, upinfo->host, size);
+		if ((n = send(sockfd, sendline, strlen(sendline), 0)) > 0) {
+			while (fread(buf, 1, sizeof(buf), fp) > 0) {
+				if ((n = send(sockfd, buf, sizeof(buf), 0)) <= 0) break;
+			}
+		}
+
+		while ((n = recv(sockfd, recvline, MAXLINE, 0)) > 0) {
+			if (strstr(recvline, "204") >= 0) i = upinfo->retry;
+			recvline[n] = '\0';
+			printf("%s", recvline);
+		}
+	}
+
+cleanup:
+	if (fp != NULL) fclose(fp);
+	remove(upinfo->file);
+	if (upinfo->host != NULL) free(upinfo->host);
+	if (upinfo->url != NULL) free(upinfo->url);
+	if (upinfo->file != NULL) free(upinfo->file);
+	free(upinfo);
+
+	return NULL;
+}
+

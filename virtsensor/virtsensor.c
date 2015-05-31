@@ -16,6 +16,8 @@
  *   	and will only let agent know that it is online.
  */
 
+#define _GNU_SOURCE // required by asprintf
+
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef _MSC_VER
@@ -24,6 +26,8 @@
 #include <unistd.h>
 #include <getopt.h>
 #endif
+#include <string.h>
+#include <sys/timeb.h>
 #include "lib_sensor.h"
 
 #ifdef _MSC_VER
@@ -40,9 +44,6 @@ int getopt(int argc, char **argv, char *opts);
 	fputs(argv[0], stderr);\
 	fputs(s, stderr);\
 	fputc(c, stderr);}
-//(void) write(2, argv[0], (unsigned)strlen(argv[0]));\
-	//(void) write(2, s, (unsigned)strlen(s));\
-	//(void) write(2, errbuf, 2);}
 
 int	opterr = 1;
 int	optind = 1;
@@ -112,15 +113,27 @@ void usage()
  * Get datapoint data according to datapoint properties.
  * Here we fake the data using random numbers.
  */
-double get_datapoint_data(void *props)
+void * get_datapoint_data(void *props)
 {
-	double ret = 0;
-	const unsigned char *name = get_string_by_name(props, "name");
+	void *ret = NULL;
+	const char *name = get_string_by_name(props, "name");
 
 	if (strcmp(name, "temperature") == 0) {
-		ret = (150.0 * rand() / (RAND_MAX + 1.0) - 50);
+		ret = malloc(sizeof(double));
+		*(double *)ret = (150.0 * rand() / (RAND_MAX + 1.0) - 50);
 	} else if (strcmp(name, "humidity") == 0) {
-		ret = (100.0 * rand() / (RAND_MAX + 1.0));
+		ret = malloc(sizeof(double));
+		*(double *)ret = (100.0 * rand() / (RAND_MAX + 1.0));
+	} else if (strcmp(name, "image") == 0) {
+		struct timeb t;
+		ftime(&t);
+		char *file = NULL;
+		asprintf(&file, "image_%lld", 1000 * (long long)t.time + t.millitm);
+		char buf[] = {'a','b','c'};
+		FILE *fp = fopen(file, "w");
+		fwrite (buf, sizeof(buf), 1, fp);
+		fclose(fp);
+		ret = (void*)file;
 	}
 
 	return ret;
@@ -129,7 +142,7 @@ double get_datapoint_data(void *props)
 int main(int argc, char *argv[])
 {
 	int ch = 0;
-	char *config_file = default_cfg;
+	const char *config_file = default_cfg;
 
 	/* command line arguments processing */
 	while ((ch=getopt(argc, argv, "hc:f")) != EOF) {

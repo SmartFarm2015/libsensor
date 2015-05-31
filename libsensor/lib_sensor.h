@@ -20,7 +20,7 @@
  *   prop_node:  指向数据点的属性指针，基于此指针，sensor application 可以用 libsensor 提供的辅助函数取得数据点的属性值
  *
  */
-typedef double dp_data_func_t(void *prop_node);
+typedef void * dp_data_func_t(void *prop_node);
 
 /**
  * 函数指针类型定义。
@@ -35,7 +35,7 @@ typedef double dp_data_func_t(void *prop_node);
  *   data:  sensor application 自定义数据类型
  *
  */
-typedef void   set_dp_func_t(void *prop_node, void *data);
+typedef void set_dp_func_t(void *prop_node, void *data);
 
 /**
  * libsensor 的入口函数
@@ -123,7 +123,7 @@ double get_double_by_name(void *node, const char *name);
  *
  * 返回值： 指向属性名称所对应字符串的指针
  */
-char *get_string_by_name(void *node, const char *name);
+const char *get_string_by_name(void *node, const char *name);
 
 /**
  * libsensor 提供的辅助函数
