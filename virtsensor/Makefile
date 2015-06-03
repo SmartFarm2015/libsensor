@@ -15,7 +15,7 @@ endif
 
 CFLAGS += -I ../libsensor
 
-LDFLAGS += -L../libsensor -lsensor -lm -lpthread
+LDFLAGS += -L../libsensor -lsensor -lm -lpthread -ldl
 
 BIN_PROGRAM := virtsensor
 
