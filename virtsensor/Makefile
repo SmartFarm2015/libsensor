@@ -29,7 +29,7 @@ distclean clean:
 	- rm -f $(BIN_PROGRAM)
 
 install :
-	cp $(BIN_PROGRAM) $(CROSS_SYSROOT)$(PREFIX)/bin
+	cp $(BIN_PROGRAM) $(CROSS_SYSROOT)/bin
 
 #
 # ------------------------------------------------------------------

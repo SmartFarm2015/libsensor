@@ -36,8 +36,8 @@ distclean clean:
 	- rm -f $(LIB_SENSOR)
 
 install :
-	cp $(LIB_SENSOR) $(CROSS_SYSROOT)$(PREFIX)/lib
-	cp $(LIB_SENSOR_H) $(CROSS_SYSROOT)$(PREFIX)/include
+	cp $(LIB_SENSOR) $(CROSS_SYSROOT)/lib
+	cp $(LIB_SENSOR_H) $(CROSS_SYSROOT)/include
 
 #
 # ------------------------------------------------------------------
