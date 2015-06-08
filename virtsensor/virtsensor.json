@@ -1,11 +1,10 @@
 {
-  "host":"cloud.easyiot.com.cn",
+  "host":"127.0.0.1",
   "port":2883,
   "cloudserveraddr":"cloud.easyiot.com.cn",
   "cloudserverport":80,
   "api":"/api/file/personal",
   "apikey":"5boSwADdbtjrF2FvVJxHjkfUkkxxab7nh5Hoxy3iKBcc",
-  "devid":"52:54:00:12:34:56",
   "appName":"virtsensor",
   "datapoints":[
     {
