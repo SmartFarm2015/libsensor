@@ -1,0 +1,32 @@
+{
+  "host":"127.0.0.1",
+  "port":2883,
+  "cloudserveraddr":"cloud.easyiot.com.cn",
+  "cloudserverport":80,
+  "api":"/api/file/personal",
+  "apikey":"5boSwADdbtjrF2FvVJxHjkfUkkxxab7nh5Hoxy3iKBcc",
+  "appName":"smartfarm",
+  "datapoints":[
+    {
+      "props":{
+        "name":"temperature",
+        "dataType":"numeric",
+        "dataUnit":"摄氏度",
+        "dataRangeMin":"-50",
+        "dataRangeMax":"100",
+        "sampleRate":"10",
+        "appName":"smartfarm"
+      }
+    },
+    {
+      "props":{
+        "name":"image",
+        "dataType":"file",
+        "dataUnit":"个",
+        "fileType":"image",
+        "sampleRate":"30",
+        "appName":"smartfarm"
+      }
+    }
+  ]
+}

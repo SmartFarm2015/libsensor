@@ -109,7 +109,7 @@ all : samples
 	@exit 0
 
 .PHONY : samples
-samples : virtsensor
+samples : virtsensor smartfarm
 
 .PHONY: json-c
 json-c:
@@ -123,6 +123,10 @@ libsensor : json-c
 .PHONY : virtsensor
 virtsensor : libsensor
 	$(MAKE) -C virtsensor
+
+.PHONY : smartfarm
+smartfarm : libsensor
+	$(MAKE) -C smartfarm
 
 install :
 	$(MAKE) -C libsensor install
@@ -140,6 +144,7 @@ distclean clean:
 	- find . -name ".depend" -exec rm -f {} \; > /dev/null 2>&1
 	- find . -name "*~" -exec rm -f {} \; > /dev/null 2>&1
 	$(RM) ./images/*.elf ./images/*.bin ./images/*.map ./images/*.srec
+	$(MAKE) -C smartfarm clean
 	$(MAKE) -C virtsensor clean
 	$(MAKE) -C libsensor clean
 	$(MAKE) -C json-c clean
