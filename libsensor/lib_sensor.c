@@ -135,16 +135,14 @@ static void scheduleFileTransfer(int id, char *file)
 	filename = filename ? filename + 1 : file;
 	jo = json_object_object_get(config, "api");
 	if (jo == NULL)
-		asprintf(&upinfo->url, "/api/file/personal/%s_%d/%s?apiKey=%s",
-		json_object_get_string(json_object_object_get(config, "devid")),
+		asprintf(&upinfo->url, "/api/file/personal/%d/%s?apiKey=%s",
 		id,
 		filename,
 		json_object_get_string(json_object_object_get(config, "apikey"))
 		);
 	else
-		asprintf(&upinfo->url, "%s/%s_%d/%s?apiKey=%s",
+		asprintf(&upinfo->url, "%s/%d/%s?apiKey=%s",
 		json_object_get_string(jo),
-		json_object_get_string(json_object_object_get(config, "devid")),
 		id,
 		filename,
 		json_object_get_string(json_object_object_get(config, "apikey"))
@@ -782,6 +780,7 @@ static void *http_putfile(void *thread_param)
 			free(sendline);
 			sendline = NULL;
 		}
+
 		asprintf(&sendline,
 			"PUT %s HTTP/1.1\r\n"
 			"HOST: %s\r\n"
@@ -790,14 +789,19 @@ static void *http_putfile(void *thread_param)
 			, upinfo->url, upinfo->host, size);
 		if ((n = send(sockfd, sendline, strlen(sendline), 0)) > 0) {
 			while (fread(buf, 1, sizeof(buf), fp) > 0) {
-				if ((n = send(sockfd, buf, sizeof(buf), 0)) <= 0) break;
+				if ((n = send(sockfd, buf, sizeof(buf), 0)) <= 0)
+					break;
 			}
 		}
 
 		while ((n = recv(sockfd, recvline, MAXLINE, 0)) > 0) {
-			if (strstr(recvline, "204") >= 0) i = upinfo->retry;
+			if (strstr(recvline, "204") >= 0)
+				i = upinfo->retry;
+#if 0
+			/* dump out received header */
 			recvline[n] = '\0';
 			printf("%s", recvline);
+#endif
 		}
 	}
 
