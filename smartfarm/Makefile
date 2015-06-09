@@ -13,9 +13,9 @@ ifndef CFLAGS
 	CFLAGS := -Wall -Wno-deprecated-declarations -g
 endif
 
-CFLAGS += -I ../libsensor
+CFLAGS += -I ../libsensor -I../galileo-gpio
 
-LDFLAGS += -L../libsensor -lsensor -lm -lpthread -ldl
+LDFLAGS += -L../libsensor -lsensor -L../galileo-gpio -lggpio -lm -lpthread -ldl
 
 BIN_PROGRAM := smartfarm
 

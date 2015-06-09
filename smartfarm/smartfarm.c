@@ -24,7 +24,9 @@
 #include <getopt.h>
 #include <string.h>
 #include <sys/timeb.h>
+#include <math.h>
 #include "lib_sensor.h"
+#include "ggpio.h"
 
 const char *default_cfg = "smartfarm.json";
 
@@ -42,13 +44,37 @@ void usage()
  */
 void * get_datapoint_data(void *props)
 {
+	float temperature;
 	void *ret = NULL;
 	const char *name = get_string_by_name(props, "name");
+	ret = malloc(sizeof(double));
+	if (ret == NULL) {
+		perror("No memory available.\n");
+		exit(-1);
+	}
 
 	if (strcmp(name, "temperature") == 0) {
-		/* initially just use fake random value */
-		ret = malloc(sizeof(double));
-		*(double *)ret = (150.0 * rand() / (RAND_MAX + 1.0) - 50);
+		/* the temperature sensor's output connect to a0 pin of
+		   galileo */
+		int a0v = galileo_analog_read(0);
+		/* the value of a0v should within [0,4096], that use 12bit to
+		 * moderize 0~5v voltage, which means 0 stands for 0v while
+		 * 4096 stands for 5v. */
+		printf("Readed a0 pin voltage: %1.2f\n", ((double)a0v * 5) / 4096);
+
+		/* then next we'll need to calculate temperature based on
+		 * the design of temperature sensor.
+		 */
+		int val = a0v / 4;
+		int B = 3975;
+		float resistance;
+		if (val != 0) {
+			resistance = (float)(1023 - val) * 10000 / val;
+			temperature = 1 / (log(resistance / 10000) / B + 1 / 298.15) - 273.15;
+		}
+		printf("The temperature is: %2.2f c\n", temperature);
+		/* return the temperature to libsensor */
+		*(double *)ret = (double)temperature;
 	} else if (strcmp(name, "image") == 0) {
 		struct timeb t;
 		ftime(&t);
@@ -58,7 +84,7 @@ void * get_datapoint_data(void *props)
 		/* note, according to asprintf, the 'file' need be freed
 		   later, which will be done by libsensor */
 		asprintf(&file, "image_%lld%s", 1000 * (long long)t.time + t.millitm, ".jpg");
-		asprintf(&cmd, "fswebcam --save %s 2>/dev/null", file);
+		asprintf(&cmd, "fswebcam -r 1280x720 --save %s 2>/dev/null", file);
 		system(cmd);
 		free(cmd);
 		cmd = NULL;
