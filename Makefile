@@ -120,12 +120,16 @@ json-c:
 libsensor : json-c
 	$(MAKE) -C libsensor
 
+.PHONY : libggpio
+libggpio :
+	$(MAKE) -C galileo-gpio
+
 .PHONY : virtsensor
 virtsensor : libsensor
 	$(MAKE) -C virtsensor
 
 .PHONY : smartfarm
-smartfarm : libsensor
+smartfarm : libsensor libggpio
 	$(MAKE) -C smartfarm
 
 install :
@@ -145,6 +149,7 @@ distclean clean:
 	- find . -name "*~" -exec rm -f {} \; > /dev/null 2>&1
 	$(RM) ./images/*.elf ./images/*.bin ./images/*.map ./images/*.srec
 	$(MAKE) -C smartfarm clean
+	$(MAKE) -C galileo-gpio clean
 	$(MAKE) -C virtsensor clean
 	$(MAKE) -C libsensor clean
 	$(MAKE) -C json-c clean
