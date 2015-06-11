@@ -29,7 +29,7 @@ LIB_GGPIO_H := ggpio.h
 all: $(LIB_GGPIO) test
 
 test: ggpio.c
-	$(CC) -DGGPIO_TEST -o $@ $< ../json-c/libjson-c.a
+	$(CC) $(CFLAGS) -DGGPIO_TEST -o $@ $< ../json-c/libjson-c.a
 
 $(LIB_GGPIO): ggpio.o
 	$(CC) $(CFLAGS) -o $@ $< ../json-c/libjson-c.a
