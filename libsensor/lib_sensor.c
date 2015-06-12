@@ -806,11 +806,20 @@ static void *http_putfile(void *thread_param)
 	}
 
 cleanup:
-	if (fp != NULL) fclose(fp);
+	if (sockfd > 0)
+		close(sockfd);
+
+	if (fp != NULL)
+		fclose(fp);
+
 	remove(upinfo->file);
-	if (upinfo->host != NULL) free(upinfo->host);
-	if (upinfo->url != NULL) free(upinfo->url);
-	if (upinfo->file != NULL) free(upinfo->file);
+	if (upinfo->host != NULL)
+		free(upinfo->host);
+	if (upinfo->url != NULL)
+		free(upinfo->url);
+	if (upinfo->file != NULL)
+		free(upinfo->file);
+
 	free(upinfo);
 
 	return NULL;
