@@ -35,7 +35,7 @@
 #define __stringify_1(x)    #x
 #define __stringify(x)      __stringify_1(x)
 
-#define MAXLINE 4096
+#define MAXLINE 256
 
 #ifdef _MSC_VER
 #define insane_free(ptr) { free(ptr); ptr = 0; }
@@ -109,8 +109,9 @@ static void *http_putfile(void *thread_param);
 /*
  * Schedule file transfer into a thread
  */
-static void scheduleFileTransfer(int id, char *file)
+static int doFileTransfer(int id, char *file)
 {
+	int ret = 0;
 	struct upload_info *upinfo = malloc(sizeof(struct upload_info));
 	upinfo->file = strdup(file);
 
@@ -156,16 +157,20 @@ static void scheduleFileTransfer(int id, char *file)
 
 	if (upinfo->file == NULL || upinfo->host == NULL || upinfo->url == NULL) {
 		printf("Out of memory!");
-		return;
+		ret = -1;
 	}
+
 #ifdef _MSC_VER
-	HANDLE thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)http_putfile, (void *)upinfo, 0, NULL);
+       HANDLE thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)http_putfile, (void *)upinfo, 0, NULL);
 #else
-	pthread_t thr;
-	if (pthread_create(&thr, NULL, http_putfile, (void*)upinfo) != 0) {
-		printf("create upload thread failed");
-	}
+       pthread_t thr;
+       if (pthread_create(&thr, NULL, http_putfile, (void*)upinfo) != 0) {
+               printf("create upload thread failed");
+               ret = -1;
+       }
 #endif
+
+       return ret;
 }
 
 /*
@@ -288,21 +293,30 @@ void handle_message(json_object *req, json_object *res)
 		// See if found
 		if (i < n) {
 			json_object *data_obj = NULL;
-			json_object *result_obj = json_object_new_object();
-			json_object_object_add(result_obj, "date", json_object_new_int64(get_system_time()));
+			json_object *result_obj = NULL;
 			const char *datatype = json_object_get_string(json_object_object_get(idx, "dataType"));
 			void *data = __get_datapoint_data(json_object_object_get(idx, "props"));
 			if (data != NULL) {
 				if (strcmp(datatype, "numeric") == 0) {
 					data_obj = json_object_new_double(*(double*)data);
 				} else if (strcmp(datatype, "file") == 0) {
-					data_obj = json_object_new_string((const char*)data);
-					scheduleFileTransfer(dpid, (char*)data);
+					if (doFileTransfer(dpid, (char*)data) == 0) {
+						data_obj = json_object_new_string((const char*)data);
+					} else {
+						fprintf(stderr, "Upload file to server failed.\n");
+					}
 				}
 				free(data);
 			}
-			json_object_object_add(result_obj, "data", data_obj);
-			json_object_object_add(res, "result", result_obj);
+			if (data_obj != NULL) {
+				result_obj = json_object_new_object();
+				json_object_object_add(result_obj, "date", json_object_new_int64(get_system_time()));
+				json_object_object_add(result_obj, "data", data_obj);
+				json_object_object_add(res, "result", result_obj);
+			} else {
+				json_object_object_add(res, "result", json_object_new_boolean(FALSE));
+				json_object_object_add(res, "error", json_object_new_string("Get data failed."));
+			}
 		} else {
 			json_object_object_add(res, "result", json_object_new_boolean(FALSE));
 			json_object_object_add(res, "error", json_object_new_string("ID not found!"));
@@ -593,9 +607,12 @@ int lib_sensor_start(const char *cfg_file,
 							asprintf(&msg, "{\"method\": \"data\", \"params\":{\"%s\": {\"date\":%lld, \"data\":\"%lf\"}}, \"id\":%lld}",
 								id, t, *(double*)data, t);
 						} else if (strcmp(datatype, "file") == 0) {
-							asprintf(&msg, "{\"method\": \"data\", \"params\":{\"%s\": {\"date\":%lld, \"data\":\"%s\"}}, \"id\":%lld}",
-								id, t, (char*)data, t);
-							scheduleFileTransfer(atoi(id), (char*)data);
+							if (doFileTransfer(atoi(id), (char*)data) == 0) {
+								asprintf(&msg, "{\"method\": \"data\", \"params\":{\"%s\": {\"date\":%lld, \"data\":\"%s\"}}, \"id\":%lld}",
+								         id, t, (char*)data, t);
+							} else {
+								fprintf(stderr, "upload file to server failed.\n");
+							}
 						}
 						free(data);
 					}
@@ -737,56 +754,86 @@ const char *string_from_config_by_name(const char *name)
 
 static void *http_putfile(void *thread_param)
 {
-	if (thread_param == NULL) return NULL;
+	if (thread_param == NULL)
+		return NULL;
+
 #ifndef _MSC_VER
 	pthread_detach(pthread_self());
 #endif
+
 	FILE *fp;
 	struct hostent *hptr;
 	struct sockaddr_in servaddr;
 	struct upload_info *upinfo = (struct upload_info *)thread_param;
-	char buf[256];
+	char buf[256] = {};
 	int i, sockfd, size;
 	int n;
-	char *sendline = NULL, recvline[MAXLINE + 1];
+	char *sendline = NULL;
+	char recvline[MAXLINE + 1];
+	int ret = 0;
+
+	/* get size of the file */
 	fp = fopen(upinfo->file, "r");
 	if (fp == NULL) {
 		printf("Fail to read file: %s\n", upinfo->file);
 		goto cleanup;
 	}
-	fseek(fp, 0L, SEEK_END);
+	ret = fseek(fp, 0L, SEEK_END);
+	if (ret < 0) {
+		fprintf(stderr, "fseek error: %d\n", errno);
+		goto cleanup;
+	}
 	size = ftell(fp);
+	if (size < 0) {
+		fprintf(stderr, "ftell error: %d\n", errno);
+		goto cleanup;
+	}
 
 	if ((hptr = gethostbyname(upinfo->host)) == NULL) {
 		printf("gethostbyname error for host: %s\n", upinfo->host);
 		goto cleanup;
 	}
 
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (sockfd < 0) {
+		fprintf(stderr, "create socket error: %d\n", errno);
+		goto cleanup;
+	}
+
+	memset(&servaddr, 0, sizeof(servaddr));
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_port = htons(upinfo->port);
+	memcpy(&(servaddr.sin_addr.s_addr), hptr->h_addr, hptr->h_length);
+
 	for (i = 0; i < upinfo->retry; i++) {
-		sockfd = socket(AF_INET, SOCK_STREAM, 0);
-		memset(&servaddr, 0, sizeof(servaddr));
-		servaddr.sin_family = AF_INET;
-		servaddr.sin_port = htons(upinfo->port);
-		memcpy(&(servaddr.sin_addr.s_addr), hptr->h_addr, hptr->h_length);
-		while (connect(sockfd, (struct sockaddr *) & servaddr, sizeof(servaddr)) == -1) {
+		while (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
 			if (EINPROGRESS != errno) {
-				printf("Connect to server failed.");
-				continue;
+				fprintf(stderr, "connect to server error: %d\n", errno);
 			}
 		}
 
-		fseek(fp, 0L, SEEK_SET);
+		ret = fseek(fp, 0L, SEEK_SET);
+		if (ret < 0) {
+			fprintf(stderr, "feek error #1: %d\n", errno);
+			goto cleanup;
+		}
+
 		if (sendline != NULL) {
 			free(sendline);
 			sendline = NULL;
 		}
 
-		asprintf(&sendline,
+		ret = asprintf(&sendline,
 			"PUT %s HTTP/1.1\r\n"
 			"HOST: %s\r\n"
 			"Content-type: application/octet-stream\r\n"
 			"Content-length: %d\r\n\r\n"
 			, upinfo->url, upinfo->host, size);
+		if (ret < 0) {
+			fprintf(stderr, "memory exhausted.\n");
+			continue;
+		}
+
 		if ((n = send(sockfd, sendline, strlen(sendline), 0)) > 0) {
 			while (fread(buf, 1, sizeof(buf), fp) > 0) {
 				if ((n = send(sockfd, buf, sizeof(buf), 0)) <= 0)
@@ -795,13 +842,19 @@ static void *http_putfile(void *thread_param)
 		}
 
 		while ((n = recv(sockfd, recvline, MAXLINE, 0)) > 0) {
-			if (strstr(recvline, "204") >= 0)
-				i = upinfo->retry;
 #if 0
 			/* dump out received header */
 			recvline[n] = '\0';
 			printf("%s", recvline);
 #endif
+			if (strstr(recvline, "204 No Content") != NULL) {
+				fflush(stdout);
+				ret = 0;
+				i = upinfo->retry;
+				close(sockfd);
+				sockfd = -1;
+				goto cleanup;
+			}
 		}
 	}
 
@@ -821,6 +874,7 @@ cleanup:
 		free(upinfo->file);
 
 	free(upinfo);
+	printf("--- finished file upload ---\n");
 
 	return NULL;
 }
