@@ -4,7 +4,7 @@
   "cloudserveraddr":"cloud.easyiot.com.cn",
   "cloudserverport":80,
   "api":"/api/file/personal",
-  "apikey":"5boSwADdbtjrF2FvVJxHjkfUkkxxab7nh5Hoxy3iKBcc",
+  "apikey":"dacJk44vBXbqwyHZMJI8apVUG3TIjcgowR5wKkVYuhkc",
   "appName":"smartfarm",
   "datapoints":[
     {
@@ -14,7 +14,18 @@
         "dataUnit":"摄氏度",
         "dataRangeMin":"-50",
         "dataRangeMax":"100",
-        "sampleRate":"10",
+        "sampleRate":"60",
+        "appName":"smartfarm"
+      }
+    },
+    {
+      "props":{
+        "name":"light",
+        "dataType":"numeric",
+        "dataUnit":"lux",
+        "dataRangeMin":"0",
+        "dataRangeMax":"1024",
+        "sampleRate":"60",
         "appName":"smartfarm"
       }
     },
@@ -24,7 +35,7 @@
         "dataType":"file",
         "dataUnit":"个",
         "fileType":"image",
-        "sampleRate":"30",
+        "sampleRate":"300",
         "appName":"smartfarm"
       }
     }

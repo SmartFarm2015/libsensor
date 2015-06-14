@@ -71,10 +71,29 @@ void * get_datapoint_data(void *props)
 		if (val != 0) {
 			resistance = (float)(1023 - val) * 10000 / val;
 			temperature = 1 / (log(resistance / 10000) / B + 1 / 298.15) - 273.15;
+			temperature = temperature - 5;
 		}
 		printf("The temperature is: %2.2f c\n", temperature);
 		/* return the temperature to libsensor */
 		*(double *)ret = (double)temperature;
+	} else if (strcmp(name, "light") == 0) {
+		/* the light sensor's output connect to a2 pin of
+		   galileo */
+		int a2v = galileo_analog_read(2);
+		/* the value of a2v should within [0,4096], that use 12bit to
+		 * moderize 0~5v voltage, which means 0 stands for 0v while
+		 * 4096 stands for 5v. */
+		printf("Readed a2 pin voltage: %1.2f\n", ((double)a2v * 5) / 4096);
+
+		/* then next we'll need to calculate temperature based on
+		 * the design of temperature sensor.
+		 */
+		int val = a2v / 4;
+		float light = (float)val;
+
+		printf("The light is: %2.2f lux\n", light);
+		/* return the temperature to libsensor */
+		*(double *)ret = (double)light;
 	} else if (strcmp(name, "image") == 0) {
 		struct timeb t;
 		ftime(&t);
