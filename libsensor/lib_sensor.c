@@ -136,7 +136,7 @@ static int doFileTransfer(int id, char *file)
 	filename = filename ? filename + 1 : file;
 	jo = json_object_object_get(config, "api");
 	if (jo == NULL)
-		asprintf(&upinfo->url, "/api/file/personal/%d/%s?apiKey=%s",
+		asprintf(&upinfo->url, "/api/file/%d/%s?apiKey=%s",
 		id,
 		filename,
 		json_object_get_string(json_object_object_get(config, "apikey"))

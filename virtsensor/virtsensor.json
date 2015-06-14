@@ -3,7 +3,7 @@
   "port":2883,
   "cloudserveraddr":"cloud.easyiot.com.cn",
   "cloudserverport":80,
-  "api":"/api/file/personal",
+  "api":"/api/file",
   "apikey":"5boSwADdbtjrF2FvVJxHjkfUkkxxab7nh5Hoxy3iKBcc",
   "appName":"virtsensor",
   "datapoints":[
