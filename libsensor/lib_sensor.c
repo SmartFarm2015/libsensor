@@ -823,12 +823,14 @@ static void *http_putfile(void *thread_param)
 	memcpy(&(servaddr.sin_addr.s_addr), hptr->h_addr, hptr->h_length);
 
 	for (i = 0; i < upinfo->retry; i++) {
-		while (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
+		while ((ret = connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr))) < 0) {
 			if (EINPROGRESS != errno) {
 				fprintf(stderr, "connect to server error: %d\n", errno);
 				break;
 			}
 		}
+
+		if (ret < 0) continue;
 
 		ret = fseek(fp, 0L, SEEK_SET);
 		if (ret < 0) {
