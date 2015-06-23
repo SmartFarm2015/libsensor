@@ -783,7 +783,7 @@ static void *http_putfile(void *thread_param)
 	struct sockaddr_in servaddr;
 	struct upload_info *upinfo = (struct upload_info *)thread_param;
 	char buf[256] = {};
-	int i, sockfd, size;
+	int i, sockfd=0, size;
 	int n;
 	char *sendline = NULL;
 	char recvline[MAXLINE + 1];
