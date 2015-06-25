@@ -14,7 +14,6 @@
         "dataRangeMin":"-50",
         "dataRangeMax":"100",
         "sampleRate":"10",
-        "appName":"smartfarm"
       }
     },
     {
@@ -25,7 +24,6 @@
         "dataRangeMin":"0",
         "dataRangeMax":"1024",
         "sampleRate":"60",
-        "appName":"smartfarm"
       }
     },
     {
@@ -36,7 +34,16 @@
         "dataRangeMin":"0",
         "dataRangeMax":"1024",
         "sampleRate":"60",
-        "appName":"smartfarm"
+      }
+    },
+    {
+      "props":{
+        "name":"lm35-temperature",
+        "dataType":"numeric",
+        "dataUnit":"摄氏度",
+        "dataRangeMin":"0",
+        "dataRangeMax":"100",
+        "sampleRate":"60",
       }
     },
     {
@@ -46,7 +53,6 @@
         "dataUnit":"个",
         "fileType":"image",
         "sampleRate":"60",
-        "appName":"smartfarm"
       }
     }
   ]

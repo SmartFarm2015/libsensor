@@ -89,6 +89,16 @@ void * get_datapoint_data(void *props)
 		int val = a2v / 4;
 		printf("The sound number is: %2.2f\n", (double)val);
 		*(double *)ret = (double)val;
+	} else if (strcmp(name, "lm35-temperature") == 0) {
+		int a0v = galileo_analog_read(0);
+		/* get voltage */
+		printf("Readed a0 pin voltage: %1.2f\n", ((double)a0v * 5) / 4096);
+
+		double val = a0v / 4;
+		/* the lm35 output voltage is 10mV per degree, from 0 to 100 C */
+		double temperature = (val * 5 / 1024) * 100.00;
+		printf("The lm35 temperature is: %2.2f C\n", temperature);
+		*(double *)ret = temperature;
 	} else if (strcmp(name, "image") == 0) {
 		struct timeb t;
 		ftime(&t);
