@@ -28,7 +28,7 @@
 #include "lib_sensor.h"
 #include "ggpio.h"
 
-const char *default_cfg = "smartfarm.json";
+const char *default_cfg = "sensor-app.json";
 
 void usage()
 {
@@ -53,7 +53,7 @@ void * get_datapoint_data(void *props)
 		exit(-1);
 	}
 
-	if (strcmp(name, "temperature") == 0) {
+	if (strcmp(name, "grove_temperature") == 0) {
 		/* the temperature sensor's output connect to a0 pin of
 		   galileo */
 		int a0v = galileo_analog_read(0);
@@ -75,6 +75,20 @@ void * get_datapoint_data(void *props)
 		printf("The temperature is: %2.2f c\n", temperature);
 		/* return the temperature to libsensor */
 		*(double *)ret = (double)temperature;
+	} else if (strcmp(name, "grove_light") == 0) {
+		int a1v = galileo_analog_read(1);
+		printf("Readed a1 pin voltage: %1.2f\n", ((double)a1v * 5) / 4096);
+
+		int val = a1v / 4;
+		printf("The light number is: %2.2f\n", (double)val);
+		*(double *)ret = (double)val;
+	} else if (strcmp(name, "grove_sound") == 0) {
+		int a2v = galileo_analog_read(2);
+		printf("Readed a2 pin voltage: %1.2f\n", ((double)a2v * 5) / 4096);
+
+		int val = a2v / 4;
+		printf("The sound number is: %2.2f\n", (double)val);
+		*(double *)ret = (double)val;
 	} else if (strcmp(name, "image") == 0) {
 		struct timeb t;
 		ftime(&t);

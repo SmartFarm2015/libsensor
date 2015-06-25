@@ -4,11 +4,11 @@
   "cloudserveraddr":"cloud.easyiot.com.cn",
   "cloudserverport":80,
   "apikey":"5boSwADdbtjrF2FvVJxHjkfUkkxxab7nh5Hoxy3iKBcc",
-  "appName":"smartfarm",
+  "appName":"sensor-app",
   "datapoints":[
     {
       "props":{
-        "name":"temperature",
+        "name":"grove-temperature",
         "dataType":"numeric",
         "dataUnit":"摄氏度",
         "dataRangeMin":"-50",
@@ -19,11 +19,33 @@
     },
     {
       "props":{
+        "name":"grove-light",
+        "dataType":"numeric",
+        "dataUnit":"流明",
+        "dataRangeMin":"0",
+        "dataRangeMax":"1024",
+        "sampleRate":"60",
+        "appName":"smartfarm"
+      }
+    },
+    {
+      "props":{
+        "name":"grove-sound",
+        "dataType":"numeric",
+        "dataUnit":"分贝",
+        "dataRangeMin":"0",
+        "dataRangeMax":"1024",
+        "sampleRate":"60",
+        "appName":"smartfarm"
+      }
+    },
+    {
+      "props":{
         "name":"image",
         "dataType":"file",
         "dataUnit":"个",
         "fileType":"image",
-        "sampleRate":"30",
+        "sampleRate":"60",
         "appName":"smartfarm"
       }
     }

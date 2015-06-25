@@ -109,7 +109,7 @@ all : samples
 	@exit 0
 
 .PHONY : samples
-samples : virtsensor smartfarm
+samples : virtsensor sensor-app
 
 .PHONY: json-c
 json-c:
@@ -128,9 +128,9 @@ libggpio :
 virtsensor : libsensor
 	$(MAKE) -C virtsensor
 
-.PHONY : smartfarm
-smartfarm : libsensor libggpio
-	$(MAKE) -C smartfarm
+.PHONY : sensor-app
+sensor-app : libsensor libggpio
+	$(MAKE) -C sensor-app
 
 install :
 	$(MAKE) -C libsensor install
@@ -148,7 +148,7 @@ distclean clean:
 	- find . -name ".depend" -exec rm -f {} \; > /dev/null 2>&1
 	- find . -name "*~" -exec rm -f {} \; > /dev/null 2>&1
 	$(RM) ./images/*.elf ./images/*.bin ./images/*.map ./images/*.srec
-	$(MAKE) -C smartfarm clean
+	$(MAKE) -C sensor-app clean
 	$(MAKE) -C galileo-gpio clean
 	$(MAKE) -C virtsensor clean
 	$(MAKE) -C libsensor clean
