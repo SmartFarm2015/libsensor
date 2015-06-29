@@ -44,7 +44,7 @@ void usage()
  */
 void * get_datapoint_data(void *props)
 {
-	float temperature;
+	float temperature = 0.0;
 	void *ret = NULL;
 	const char *name = get_string_by_name(props, "name");
 	ret = malloc(sizeof(double));
