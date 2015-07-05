@@ -136,7 +136,7 @@ static int doFileTransfer(int id, char *file)
 	filename = filename ? filename + 1 : file;
 	jo = json_object_object_get(config, "api");
 	if (jo == NULL)
-		asprintf(&upinfo->url, "/api/file/personal/%d/%s?apiKey=%s",
+		asprintf(&upinfo->url, "/api/file/%d/%s?apiKey=%s",
 		id,
 		filename,
 		json_object_get_string(json_object_object_get(config, "apikey"))
@@ -543,13 +543,15 @@ int lib_sensor_start(const char *cfg_file,
 		}
 	}
 
-	/* register datapoints to agent */
-	int n, i, bytes, msgid = 1;
-	registerdatapoints(msgid);
-
 	printf("sensor app successfully connected to agent.\n");
 
+	/* register datapoints to agent */
+
+	int msgid = 1;
+	registerdatapoints(msgid);
+
 	/* handling retriving messages/commands */
+	int n, i, bytes;
 	fd_set fdset;
 	int max_read_size, pos = 0;
 	unsigned int buffer_size = 1024;
@@ -666,8 +668,23 @@ int lib_sensor_start(const char *cfg_file,
 				val = json_object_object_get(jo, "result");
 				if (val != NULL) {
 					/* Response */
-					if (msgid == json_object_get_int(json_object_object_get(jo, "id"))) {
-						/* reg success
+					if (msgid == json_object_get_int(json_object_object_get(jo, "id")) && msgid == 1) {
+						/* this is the response of reg_datapoint */
+						if (json_object_get_type(val) == json_type_boolean) {
+							json_bool r = json_object_get_boolean(val);
+							if (r == 0) {
+								/* this means there is
+								   { "result": false }
+								   in returned msg */
+								printf("Register sensor to dmagent failed.\n");
+								printf(" Please try to remove the \"id: ...\" line "
+								       "from sensor-app.json then rerun sensor "
+								       "application again.\n");
+								exit(-1);
+							}
+						}
+
+						/* reg new datapoints success ..
 						 * If the result is an array of ids, update local config file.
 						 */
 						if (json_object_get_type(val) == json_type_array) {
@@ -766,7 +783,7 @@ static void *http_putfile(void *thread_param)
 	struct sockaddr_in servaddr;
 	struct upload_info *upinfo = (struct upload_info *)thread_param;
 	char buf[256] = {};
-	int i, sockfd, size;
+	int i, sockfd=0, size;
 	int n;
 	char *sendline = NULL;
 	char recvline[MAXLINE + 1];
@@ -806,11 +823,14 @@ static void *http_putfile(void *thread_param)
 	memcpy(&(servaddr.sin_addr.s_addr), hptr->h_addr, hptr->h_length);
 
 	for (i = 0; i < upinfo->retry; i++) {
-		while (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
+		while ((ret = connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr))) < 0) {
 			if (EINPROGRESS != errno) {
 				fprintf(stderr, "connect to server error: %d\n", errno);
+				break;
 			}
 		}
+
+		if (ret < 0) continue;
 
 		ret = fseek(fp, 0L, SEEK_SET);
 		if (ret < 0) {
@@ -874,8 +894,6 @@ cleanup:
 		free(upinfo->file);
 
 	free(upinfo);
-	printf("--- finished file upload ---\n");
 
 	return NULL;
 }
-

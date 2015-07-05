@@ -17,11 +17,11 @@ CFLAGS += -I ../libsensor -I../galileo-gpio
 
 LDFLAGS += -L../libsensor -lsensor -L../galileo-gpio -lggpio -lm -lpthread -ldl
 
-BIN_PROGRAM := smartfarm
+BIN_PROGRAM := sensor-app
 
 all: $(BIN_PROGRAM)
 
-smartfarm : smartfarm.o
+sensor-app : sensor-app.o
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 
 distclean clean:

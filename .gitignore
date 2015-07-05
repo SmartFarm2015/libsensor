@@ -5,3 +5,4 @@ Debug
 *.lo
 *.a
 *.la
+*.dSYM

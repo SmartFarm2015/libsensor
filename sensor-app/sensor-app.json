@@ -4,28 +4,46 @@
   "cloudserveraddr":"cloud.easyiot.com.cn",
   "cloudserverport":80,
   "apikey":"5boSwADdbtjrF2FvVJxHjkfUkkxxab7nh5Hoxy3iKBcc",
-  "appName":"virtsensor",
+  "appName":"sensor-app",
   "datapoints":[
     {
       "props":{
-        "name":"temperature",
+        "name":"grove-temperature",
         "dataType":"numeric",
         "dataUnit":"摄氏度",
         "dataRangeMin":"-50",
         "dataRangeMax":"100",
         "sampleRate":"10",
-        "appName":"virtsensor"
       }
     },
     {
       "props":{
-        "name":"humidity",
+        "name":"grove-light",
         "dataType":"numeric",
-        "dataUnit":"%",
+        "dataUnit":"流明",
+        "dataRangeMin":"0",
+        "dataRangeMax":"1024",
+        "sampleRate":"60",
+      }
+    },
+    {
+      "props":{
+        "name":"grove-sound",
+        "dataType":"numeric",
+        "dataUnit":"分贝",
+        "dataRangeMin":"0",
+        "dataRangeMax":"1024",
+        "sampleRate":"60",
+      }
+    },
+    {
+      "props":{
+        "name":"lm35-temperature",
+        "dataType":"numeric",
+        "dataUnit":"摄氏度",
         "dataRangeMin":"0",
         "dataRangeMax":"100",
-        "sampleRate":"10",
-        "appName":"virtsensor"
+        "sampleRate":"60",
       }
     },
     {
@@ -34,8 +52,7 @@
         "dataType":"file",
         "dataUnit":"个",
         "fileType":"image",
-        "sampleRate":"30",
-        "appName":"virtsensor"
+        "sampleRate":"60",
       }
     }
   ]
