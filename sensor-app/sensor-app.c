@@ -28,6 +28,17 @@
 #include "lib_sensor.h"
 #include "ggpio.h"
 
+#include <strings.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <termios.h>
+
+#define BAUDRATE B9600
+#define SERISL_DEVICE "/dev/ttyUSB0"
+
+#define _POSIX_SOURCE 1 /* POSIX compliant source */
+
 const char *default_cfg = "sensor-app.json";
 
 void usage()
@@ -36,6 +47,96 @@ void usage()
 			"Options:\n"
 			"  -c Configuration file.\n"
 			"  -h Print this Help\n");
+}
+
+static struct termios oldtio;
+static int init_serial_port(const char *port)
+{
+	int fd;
+	struct termios newtio;
+
+	fd = open(port, O_RDWR | O_NOCTTY );
+	if (fd < 0) {
+		perror(port);
+		return -1;
+	}
+
+	/* save current port settings */
+	tcgetattr(fd, &oldtio);
+	bzero(&newtio, sizeof(newtio));
+
+	newtio.c_cflag = BAUDRATE | CRTSCTS | CS8 | CLOCAL | CREAD;
+	newtio.c_iflag = IGNPAR;
+	newtio.c_oflag = 0;
+
+	/* set input mode (non-canonical, no echo,...) */
+	newtio.c_lflag = 0;
+	/* inter-character timer unused */
+	newtio.c_cc[VTIME]    = 0;
+	/* blocking read until 5 chars received */
+	newtio.c_cc[VMIN]     = 1;
+
+	tcflush(fd, TCIFLUSH);
+
+	tcsetattr(fd,TCSANOW,&newtio);
+
+	return fd;
+}
+
+static int clean_serial_port(int fd)
+{
+	tcsetattr(fd, TCSANOW, &oldtio);
+	close(fd);
+
+	return 0;
+}
+
+static void dump_str(unsigned char *cmd, int len)
+{
+	int i = 0;
+	printf("buf_len: %d\n", len);
+
+	while(i < len) {
+		printf("%02x ", cmd[i++]);
+	}
+	printf("\n");
+}
+
+static int do_read_from_serial(unsigned char *buf, int fd)
+{
+	/* file descriptor set */
+	fd_set readfds;
+	int fdmax = fd;
+	int ret = 0;
+	int buf_len = 0;
+	int res;
+
+	FD_ZERO(&readfds);
+	FD_SET(fd, &readfds);
+
+	ret = select(fdmax + 1, &readfds, NULL, NULL, NULL);
+	if (ret != 0) {
+		if (FD_ISSET(fd, &readfds)) {
+			buf_len = 0;
+
+			do {
+				/* 5s timeout */
+				struct timeval timeout = {5, 0};
+				ret = select(fdmax + 1, &readfds, NULL, NULL, &timeout);
+
+				if (ret != 1 && buf_len > 49) {
+					/* timeout */
+					break;
+				}
+
+				res = read(fd, buf + buf_len, 5);
+				/* returns after 5 chars have been input */
+				buf_len += res;
+			} while (buf_len < 50);
+		}
+	}
+
+	return buf_len;
 }
 
 /*
@@ -99,6 +200,20 @@ void * get_datapoint_data(void *props)
 		double temperature = (val * 5 / 1024) * 100.00;
 		printf("The lm35 temperature is: %2.2f C\n", temperature);
 		*(double *)ret = temperature;
+	} else if (strcmp(name, "oc_image") == 0) {
+		struct timeb t;
+		ftime(&t);
+		/* prepare a image file then return its name to libsensor */
+		char *file = NULL;
+		char *cmd = NULL;
+		/* note, according to asprintf, the 'file' need be freed
+		   later, which will be done by libsensor */
+		asprintf(&file, "image_%lld%s", 1000 * (long long)t.time + t.millitm, ".jpg");
+		asprintf(&cmd, "capture %s 2>/dev/null", file);
+		system(cmd);
+		free(cmd);
+		cmd = NULL;
+		ret = (void*)file;
 	} else if (strcmp(name, "image") == 0) {
 		struct timeb t;
 		ftime(&t);
@@ -113,6 +228,17 @@ void * get_datapoint_data(void *props)
 		free(cmd);
 		cmd = NULL;
 		ret = (void*)file;
+	} else if (strcmp(name, "serial_test") == 0) {
+		unsigned char buf[32] = {};
+		int fd = init_serial_port(SERISL_DEVICE);
+		if (fd < 0) {
+			*(double *)ret = 0;
+		} else {
+			int len = do_read_from_serial(buf, fd);
+			dump_str(buf, len);
+			*(double *)ret = 1;
+		}
+		clean_serial_port(fd);
 	}
 
 	return ret;
