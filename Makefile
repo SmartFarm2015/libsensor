@@ -109,7 +109,7 @@ all : samples
 	@exit 0
 
 .PHONY : samples
-samples : virtsensor sensor-app
+samples : virtsensor sensor-app smartfarm
 
 .PHONY: json-c
 json-c:
@@ -131,6 +131,10 @@ virtsensor : libsensor
 .PHONY : sensor-app
 sensor-app : libsensor libggpio
 	$(MAKE) -C sensor-app
+
+.PHONY : smartfarm
+smartfarm : libsensor libggpio
+	$(MAKE) -C smartfarm
 
 install :
 	$(MAKE) -C libsensor install
