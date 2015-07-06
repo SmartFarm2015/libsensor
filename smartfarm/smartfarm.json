@@ -14,7 +14,8 @@
         "dataRangeMin":"-50",
         "dataRangeMax":"100",
         "sampleRate":"30",
-        "appName":"smartfarm"
+        "appName":"smartfarm",
+		"mbdev":"/dev/ttyUSB1"
       }
     },
     {
@@ -25,7 +26,8 @@
         "dataRangeMin":"0",
         "dataRangeMax":"100",
         "sampleRate":"30",
-        "appName":"smartfarm"
+        "appName":"smartfarm",
+		"mbdev":"/dev/ttyUSB1"
       }
     },
     {
@@ -36,6 +38,7 @@
         "dataRangeMin":"0",
         "dataRangeMax":"1000",
         "sampleRate":"30",
+		"sdev":"/dev/ttyUSB0",
         "appName":"smartfarm"
       }
     },
@@ -47,6 +50,7 @@
         "dataRangeMin":"0",
         "dataRangeMax":"1000",
         "sampleRate":"30",
+		"sdev":"/dev/ttyUSB0",
         "appName":"smartfarm"
       }
     },

@@ -106,9 +106,8 @@ static int get_mb_reg(modbus_t *ctx, int reg_addr, int data_len, void *data)
     return ret;
 }
 
-int get_mbsensor_data(int dev_addr, int reg_addr)
+int get_mbsensor_data(const char *mb_device, int dev_addr, int reg_addr)
 {
-    const char *mb_device = "/dev/ttyUSB0";
     int mb_addr = dev_addr; // 485 slave address, 3
     int mb_reg_addr = reg_addr; // reg address 0:humi, 1:temp
     int mb_reg_data_len = 1; // register data length, int16=2Byte
@@ -232,17 +231,16 @@ static int do_read_from_serial(unsigned char *buf, int fd)
 	FD_ZERO(&readfds);
 	FD_SET(fd, &readfds);
 
-	ret = select(fdmax + 1, &readfds, NULL, NULL, NULL);
+	/* 5s timeout */
+	struct timeval timeout = {5, 0};
+	ret = select(fdmax + 1, &readfds, NULL, NULL, &timeout);
 	if (ret != 0) {
 		if (FD_ISSET(fd, &readfds)) {
 			buf_len = 0;
 
 			do {
-				/* 5s timeout */
-				struct timeval timeout = {5, 0};
 				ret = select(fdmax + 1, &readfds, NULL, NULL, &timeout);
-
-				if (ret != 1 && buf_len > 49) {
+				if (ret != 1) {
 					/* timeout */
 					break;
 				}
@@ -263,27 +261,27 @@ static int do_read_from_serial(unsigned char *buf, int fd)
 // data[0] = 0x42
 // PM2.5 = data[6]<<8 + data[7];
 // PM10  = data[8]<<8 + data[9];
-int get_airpmindex(int type)
+int get_airpmindex(const char *dev_name, int type)
 {
+	unsigned char buf[51] = {};
+	int fd = init_serial_port(dev_name);
+	if (fd < 0) {
+		return -1;
+	} else {
+		int len = do_read_from_serial(buf, fd);
+		dump_str(buf, len);
+	}
+	clean_serial_port(fd);
 
-    unsigned char buf[51] = {};
-    int fd = init_serial_port("/dev/ttyUSB1");
-    if (fd < 0) {
-	return -1;
-    } else {
-	int len = do_read_from_serial(buf, fd);
-	dump_str(buf, len);
-    }
-    clean_serial_port(fd);
-    int t;
-    if(type==5){
-	t = (((unsigned int)buf[6])<<8) + (unsigned int)buf[7];
-	return t;
-    } else if(type==10) {
-	t = (((unsigned int)buf[8])<<8) + (unsigned int)buf[9];
-	return t;
-    } else
-	return 0;
+	int t;
+	if (type == 5) {
+		t = (((unsigned int)buf[6])<<8) + (unsigned int)buf[7];
+		return t;
+	} else if(type == 10) {
+		t = (((unsigned int)buf[8])<<8) + (unsigned int)buf[9];
+		return t;
+	} else
+		return 0;
 }
 
 /*
@@ -301,10 +299,10 @@ void * get_datapoint_data(void *props)
 	}
 
 	if (strcmp(name, "temperature") == 0) {
-
+		const char *mbd = get_string_by_name(props, "mbdev");
 	    // 485 device address:3
 	    // temperature register address: 1
-	    int val = get_mbsensor_data(3, 1);
+		int val = get_mbsensor_data(mbd, 3, 1);
 	    // convert to centigrade
 	    double temperature = (double)val/10;
 	    printf("Temperature is %2.2f C degree\n", temperature);
@@ -313,10 +311,10 @@ void * get_datapoint_data(void *props)
 	    *(double *)ret = (double)temperature;
 
 	}else if (strcmp(name, "humidity") == 0) {
-
+		const char *mbd = get_string_by_name(props, "mbdev");
 	    // 485 device address:3
 	    // humidity register address: 0
-	    int val = get_mbsensor_data(3, 0);
+		int val = get_mbsensor_data(mbd, 3, 0);
 	    // convert to centigrade
 	    double humidity= (double)val/10;
 	    printf("Humidity is %2.2f percent\n", humidity);
@@ -325,9 +323,9 @@ void * get_datapoint_data(void *props)
 	    *(double *)ret = (double)humidity;
 
 	} else if (strcmp(name, "pm2d5index") == 0) {
-
+		const char *devn = get_string_by_name(props, "sdev");
 	    // PM2.5
-	    int val = get_airpmindex(5);
+		int val = get_airpmindex(devn, 5);
 	    // convert to ug/m3
 	    double pm2d5= (double)val;
 	    printf("PM2.5 is %2.2f ug/m3\n", pm2d5);
@@ -335,11 +333,10 @@ void * get_datapoint_data(void *props)
 	    // return value to libsensor
 	    *(double *)ret = (double)pm2d5;
 
-
 	} else if (strcmp(name, "pm10index") == 0) {
-
+		const char *devn = get_string_by_name(props, "sdev");
 	    // PM10
-	    int val = get_airpmindex(10);
+		int val = get_airpmindex(devn, 10);
 	    // convert to ug/m3
 	    double pm10= (double)val;
 	    printf("PM10 is %2.2f ug/m3\n", pm10);
