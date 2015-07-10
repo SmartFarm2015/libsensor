@@ -323,22 +323,41 @@ void * get_datapoint_data(void *props)
 	    *(double *)ret = (double)humidity;
 
 	} else if (strcmp(name, "pm2d5index") == 0) {
+		static double pm2d5 = 0.0;
 		const char *devn = get_string_by_name(props, "sdev");
-	    // PM2.5
-		int val = get_airpmindex(devn, 5);
 	    // convert to ug/m3
-	    double pm2d5= (double)val;
-	    printf("PM2.5 is %2.2f ug/m3\n", pm2d5);
+		double _pm2d5 = 0.0;
+		int retry = 5;
+		do {
+		    _pm2d5 = (double)get_airpmindex(devn, 5);
+		    retry++;
+		} while ((_pm2d5 > 500 || _pm2d5 < 5) && (retry < 5));
+
+		if (_pm2d5 > 5 && _pm2d5 < 500) {
+			pm2d5 = _pm2d5;
+		}
+
+		printf("PM2.5 is %2.2f ug/m3\n", pm2d5);
 	    
 	    // return value to libsensor
 	    *(double *)ret = (double)pm2d5;
 
 	} else if (strcmp(name, "pm10index") == 0) {
+		static double pm10 = 0.0;
 		const char *devn = get_string_by_name(props, "sdev");
-	    // PM10
-		int val = get_airpmindex(devn, 10);
-	    // convert to ug/m3
-	    double pm10= (double)val;
+
+		double _pm10 = 0.0;
+
+		int retry = 5;
+		do {
+		    _pm10= (double)get_airpmindex(devn, 10);
+		    retry++;
+		} while ((_pm10 > 500 || _pm10 < 5) && (retry < 5));
+
+		if (_pm10 > 5 && _pm10 < 500) {
+			pm10 = _pm10;
+		}
+
 	    printf("PM10 is %2.2f ug/m3\n", pm10);
 	    
 	    // return value to libsensor
@@ -373,7 +392,7 @@ void * get_datapoint_data(void *props)
 		/* note, according to asprintf, the 'file' need be freed
 		   later, which will be done by libsensor */
 		asprintf(&file, "image_%lld%s", 1000 * (long long)t.time + t.millitm, ".jpg");
-		asprintf(&cmd, "fswebcam -r 1280x720 --save %s 2>/dev/null", file);
+		asprintf(&cmd, "fswebcam -c /etc/fswebcam.conf --save %s 2>/dev/null", file);
 		system(cmd);
 		free(cmd);
 		cmd = NULL;
